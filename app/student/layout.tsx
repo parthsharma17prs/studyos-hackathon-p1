@@ -11,6 +11,7 @@ import {
   LuSearch,
   LuSwords,
   LuMic,
+  LuPhone,
   LuWrench,
   LuCalendar,
   LuTrendingUp,
@@ -25,6 +26,7 @@ import {
 const studentNavItems: SidebarItem[] = [
   { icon: LuLayoutDashboard, label: 'Dashboard', href: '/student/dashboard' },
   { icon: LuMic, label: 'Orbital Voice', href: '/student/ai-call' },
+  { icon: LuPhone, label: 'Agent Booker', href: '/student/agent-booker' },
   { icon: LuBookOpen, label: 'Study Notes + Quiz', href: '/student/study' },
   { icon: LuActivity, label: 'My Scorecard', href: '/student/scorecard' },
   { icon: LuFileSearch, label: 'ATS Resume', href: '/student/resume' },

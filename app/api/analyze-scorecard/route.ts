@@ -57,7 +57,17 @@ Rules:
 - If you can't read a value, use null`;
 
     const result = await callGeminiVision(fileBase64, mimeType, prompt);
-    const parsed = JSON.parse(result);
+    let parsed;
+    try {
+      parsed = JSON.parse(result);
+    } catch {
+      const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/) || result.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+         parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      } else {
+         throw new Error('Failed to parse scorecard data');
+      }
+    }
 
     return NextResponse.json(parsed);
   } catch (error: any) {

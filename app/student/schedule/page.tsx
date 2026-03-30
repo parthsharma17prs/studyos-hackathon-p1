@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LuCalendar, LuPlus, LuClock, LuBookOpen, LuCheckCircle2, LuAlertCircle, LuTrash2 } from 'react-icons/lu';
+import { LuCalendar, LuPlus, LuClock, LuBookOpen, LuCircleCheck, LuCircleAlert, LuTrash2, LuPhone } from 'react-icons/lu';
 import { db, auth } from '@/lib/firebase';
 import { 
   collection, 
@@ -147,14 +147,14 @@ export default function StudySchedulePage() {
             </div>
             <div className="pt-6 w-full space-y-4">
                 <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center gap-3">
-                    <LuCheckCircle2 className="text-green-500" />
+                    <LuCircleCheck className="text-green-500" />
                     <div>
                         <p className="text-[10px] font-black text-green-500 uppercase tracking-widest">Completed Today</p>
                         <p className="text-lg font-black text-white">1 Task</p>
                     </div>
                 </div>
                 <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center gap-3">
-                    <LuAlertCircle className="text-orange-500" />
+                    <LuCircleAlert className="text-orange-500" />
                     <div>
                         <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Pending Tasks</p>
                         <p className="text-lg font-black text-white">3 Tasks</p>
@@ -192,7 +192,7 @@ export default function StudySchedulePage() {
                     ${task.completed ? 'bg-green-500 border-green-500' : 'border-os-border group-hover:border-student-accent'}
                   `}
                 >
-                  {task.completed && <LuCheckCircle2 className="text-white" size={18} />}
+                  {task.completed && <LuCircleCheck className="text-white" size={18} />}
                 </div>
                 
                 <div className="flex-1 space-y-1">
@@ -239,6 +239,82 @@ export default function StudySchedulePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Exam Coaching Hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mt-12 pt-12 border-t border-os-border">
+          <div className="glass-card p-10 space-y-8 border-student-accent/20 bg-gradient-to-br from-student-accent/5 to-transparent">
+              <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-student-accent/20 flex items-center justify-center text-student-accent">
+                      <LuPhone size={32} />
+                  </div>
+                  <div>
+                      <h2 className="text-3xl font-black tracking-tighter italic uppercase">Exam Coaching <span className="text-student-accent">Hub</span></h2>
+                      <p className="text-[10px] font-black text-os-muted uppercase tracking-[0.3em]">AI-Driven Last-Minute Strategy</p>
+                  </div>
+              </div>
+
+              <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-os-muted tracking-widest px-1">Subject</label>
+                          <input type="text" placeholder="e.g. DBMS" className="w-full bg-black/40 border border-os-border focus:border-student-accent rounded-xl p-4 outline-none text-sm font-bold" />
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-os-muted tracking-widest px-1">Exam Date</label>
+                          <input type="date" className="w-full bg-black/40 border border-os-border focus:border-student-accent rounded-xl p-4 outline-none text-sm font-bold" />
+                      </div>
+                  </div>
+                  <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase text-os-muted tracking-widest px-1">Phone Number</label>
+                      <input type="text" placeholder="+91..." className="w-full bg-black/40 border border-os-border focus:border-student-accent rounded-xl p-4 outline-none text-sm font-bold" />
+                  </div>
+                  
+                  <button 
+                    onClick={async () => {
+                        const res = await fetch('/api/trigger-exam-coach', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                phoneNumber: '+918319556016', 
+                                studentName: 'Parth',
+                                subject: 'Database Management Systems',
+                                redTopics: 'Normalization, SQL Joins',
+                                yellowTopics: 'ER Diagrams'
+                            })
+                        });
+                        if(res.ok) alert('Exam Coach scheduled! Triggering demo call now.');
+                    }}
+                    className="w-full bg-student-accent hover:bg-red-700 text-white p-6 rounded-2xl font-black uppercase tracking-[0.3em] transition-all hover:scale-[1.02] shadow-[0_10px_40px_rgba(229,9,20,0.3)]"
+                  >
+                      Schedule Goal Call
+                  </button>
+              </div>
+          </div>
+
+          <div className="space-y-6 text-left">
+              <div className="glass-card p-8 flex items-start gap-6 border-dashed opacity-80">
+                  <div className="w-12 h-12 rounded-full bg-os-border flex items-center justify-center flex-shrink-0 font-black">1</div>
+                  <div className="space-y-1">
+                      <h4 className="text-lg font-black tracking-tight">Identity Verification</h4>
+                      <p className="text-xs text-os-muted font-bold leading-relaxed">Parth, your virtual coach, will call to verify your readiness 3 days before the scheduled date.</p>
+                  </div>
+              </div>
+              <div className="glass-card p-8 flex items-start gap-6 border-dashed opacity-60">
+                  <div className="w-12 h-12 rounded-full bg-os-border flex items-center justify-center flex-shrink-0 font-black">2</div>
+                  <div className="space-y-1">
+                      <h4 className="text-lg font-black tracking-tight">3-Day Plan Briefing</h4>
+                      <p className="text-xs text-os-muted font-bold leading-relaxed">A focused strategy covering red and yellow topics will be delivered via PSTN.</p>
+                  </div>
+              </div>
+              <div className="glass-card p-8 flex items-start gap-6 border-dashed opacity-40">
+                  <div className="w-12 h-12 rounded-full bg-os-border flex items-center justify-center flex-shrink-0 font-black">3</div>
+                  <div className="space-y-1">
+                      <h4 className="text-lg font-black tracking-tight">Real-time Reminder</h4>
+                      <p className="text-xs text-os-muted font-bold leading-relaxed">Final reminder sent 2 hours before the test session begins.</p>
+                  </div>
+              </div>
+          </div>
       </div>
     </div>
   );

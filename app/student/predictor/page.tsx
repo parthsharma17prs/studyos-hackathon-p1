@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LuTrendingUp, LuBarChart3, LuCalendar, LuCheckCircle2, LuAlertCircle, LuPlus, LuChevronRight, LuActivity, LuFlame, LuTarget } from 'react-icons/lu';
+import { LuTrendingUp, LuChartBar, LuCalendar, LuCircleCheck, LuCircleAlert, LuPlus, LuChevronRight, LuActivity, LuFlame, LuTarget } from 'react-icons/lu';
 
 interface Prediction {
   subject: string;
@@ -67,7 +67,7 @@ export default function ExamPredictorPage() {
           {[
               { label: 'Overall Readiness', value: `${overallPrediction}%`, icon: LuActivity, color: 'text-student-accent' },
               { label: 'Trend Angle', value: '+12%', icon: LuTrendingUp, color: 'text-green-500' },
-              { label: 'Syllabus Coverage', value: '88%', icon: LuBarChart3, color: 'text-blue-500' },
+              { label: 'Syllabus Coverage', value: '88%', icon: LuChartBar, color: 'text-blue-500' },
               { label: 'Focus Streak', value: '14D', icon: LuFlame, color: 'text-orange-500' },
           ].map((stat, i) => (
               <div key={i} className="glass-card p-6 flex items-center justify-between">
@@ -121,7 +121,7 @@ export default function ExamPredictorPage() {
                   <div className="flex flex-wrap gap-2">
                     {item.improvementAreas.map((area, idx) => (
                       <span key={idx} className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border border-white/5 bg-white/5 text-os-muted flex items-center gap-2 group-hover:border-student-accent/20 group-hover:text-white transition-colors">
-                        <LuAlertCircle size={10} className="text-student-accent" />
+                        <LuCircleAlert size={10} className="text-student-accent" />
                         {area}
                       </span>
                     ))}
@@ -136,7 +136,7 @@ export default function ExamPredictorPage() {
         <div className="space-y-8">
             <div className="glass-card p-8 bg-gradient-to-br from-red-600/10 to-transparent border-red-600/20">
                 <h3 className="text-xl font-black tracking-tighter flex items-center gap-3 mb-6">
-                    <LuCheckCircle2 className="text-student-accent" /> Strategy Guide
+                    <LuCircleCheck className="text-student-accent" /> Strategy Guide
                 </h3>
                 <ul className="space-y-4">
                     {[

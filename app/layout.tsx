@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'StudyOS — The Complete AI Student Platform',
@@ -14,6 +21,7 @@ export const metadata: Metadata = {
 };
 
 import ScrollEffects from '@/components/shared/ScrollEffects';
+import LoadingScreen from '@/components/shared/LoadingScreen';
 
 export default function RootLayout({
   children,
@@ -22,7 +30,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="font-inter bg-os-black text-white min-h-screen antialiased">
+      <body className={`${inter.variable} font-sans bg-os-black text-white min-h-screen antialiased`}>
+        <LoadingScreen />
         <ScrollEffects />
         {children}
       </body>

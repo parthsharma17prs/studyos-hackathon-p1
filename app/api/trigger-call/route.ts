@@ -1,61 +1,89 @@
 import { NextRequest, NextResponse } from 'next/server';
+import twilio from 'twilio';
 
-/**
- * POST /api/trigger-call
- * Triggers an outbound AI voice call using Vapi.ai for study nudges
- */
 export async function POST(req: NextRequest) {
   try {
-    const { studentPhone, studentName, score, weakTopics } = await req.json();
+    const { phoneNumber: rawPhone, name } = await req.json();
 
-    if (!studentPhone) {
-      return NextResponse.json({ error: 'Phone number required' }, { status: 400 });
+    if (!rawPhone) {
+      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 });
     }
 
-    const VAPI_KEY = process.env.VAPI_API_KEY;
-    if (!VAPI_KEY) {
-      return NextResponse.json({ error: 'Vapi API key missing for voice calls' }, { status: 500 });
+    const phoneNumber = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`;
+
+    const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+    const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+    const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+    const ULTRAVOX_API_KEY = process.env.ULTRAVOX_API_KEY;
+
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER || !ULTRAVOX_API_KEY) {
+      return NextResponse.json({ error: 'Missing environment variables' }, { status: 500 });
     }
 
-    // Call configuration
-    const callData = {
-      phoneNumber: {
-         number: `+91${studentPhone.replace(/\\D/g, '').substring(0, 10)}` // Indian standard for Hackathon
-      },
-      assistant: {
-        model: {
-          provider: "google",
-          model: "gemini-1.5-flash",
-          systemPrompt: `You are an encouraging AI study assistant for ${studentName}.
-They just scored ${score}% on a quiz. Their weak topics are: ${weakTopics.join(', ')}.
-Your job is to call them, be super encouraging, give a brief 20-second summary of what they need to study next, and ask if they want a study plan sent to their WhatsApp.
-Be conversational, fast-paced, and empathetic. Do not sound robotic.`
-        },
-        voice: {
-          provider: "11labs",
-          voiceId: "pNInz6obbfIdGjGI5Q" // Popular Indian English female voice id
-        },
-        firstMessage: `Hi ${studentName}! I noticed your recent quiz score of ${score}%. I have some quick tips on your weak areas. Can I share them?`
-      }
+    // 1. Create call on Ultravox to get joinUrl
+    const SYSTEM_PROMPT = `
+    You are Parth, a personal AI study advisor at StudyOS.
+    StudyOS helps Indian college students improve their quiz scores, track performance, detect learning gaps, and build personalized study schedules using AI.
+    You handle inbound calls from students who request help on the platform.
+    You must always begin the call by saying:
+    "Hello! This is Parth from StudyOS. Is this a good time to talk for two minutes?"
+
+    Call Flow:
+    1. Check Availability.
+    2. Company Introduction.
+    3. Need Discovery (Ask ONE question at a time).
+    4. Solution — Give ONE Clear Action.
+    5. Wrap Up.
+
+    Style: Simple, friendly, and encouraging language. Listen first. Speak like a helpful senior student.
+    `;
+
+    const ultravoxConfig = {
+      systemPrompt: SYSTEM_PROMPT,
+      model: 'ultravox-v0.7',
+      voice: 'Raju-English-Indian', // Indian voice
+      temperature: 0.3,
+      firstSpeakerSettings: { user: {} },
+      medium: { twilio: {} }
     };
 
-    const res = await fetch('https://api.vapi.ai/call', {
+    const ultravoxRes = await fetch('https://api.ultravox.ai/api/calls', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${VAPI_KEY}`,
         'Content-Type': 'application/json',
+        'X-API-Key': ULTRAVOX_API_KEY
       },
-      body: JSON.stringify(callData),
+      body: JSON.stringify(ultravoxConfig)
     });
 
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Vapi returned ${res.status} ${text}`);
+    const ultravoxData = await ultravoxRes.json();
+
+    if (!ultravoxRes.ok) {
+      throw new Error(`Ultravox API Error: ${JSON.stringify(ultravoxData)}`);
     }
 
-    const data = await res.json();
-    return NextResponse.json({ callId: data.id, status: 'ringing' });
+    const joinUrl = ultravoxData.joinUrl;
+    if (!joinUrl) {
+      throw new Error('No joinUrl received from Ultravox');
+    }
+
+    // 2. Initiate Twilio Call
+    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+    const call = await client.calls.create({
+      twiml: `<Response><Connect><Stream url="${joinUrl}"/></Connect></Response>`,
+      to: phoneNumber,
+      from: TWILIO_PHONE_NUMBER
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Call initiated successfully via Ultravox + Twilio',
+      callSid: call.sid 
+    });
+
   } catch (error: any) {
+    console.error('Call Trigger Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

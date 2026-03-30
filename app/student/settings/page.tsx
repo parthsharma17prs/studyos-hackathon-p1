@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LuSettings, LuUser, LuBell, LuLock, LuGlobe, LuCreditCard, LuZap, LuHelpCircle, LuLogOut, LuChevronRight, LuShieldCheck, LuSparkles, LuKey } from 'react-icons/lu';
+import { LuSettings, LuUser, LuBell, LuLock, LuGlobe, LuCreditCard, LuZap, LuCircleHelp, LuLogOut, LuChevronRight, LuShieldCheck, LuSparkles, LuKey } from 'react-icons/lu';
 
 export default function SettingsPage() {
   const [user] = useState({ name: 'Demo Student', email: 'student@studyos.ai' });
@@ -39,7 +39,7 @@ export default function SettingsPage() {
     },
     { 
         id: 'help', 
-        icon: LuHelpCircle, 
+        icon: LuCircleHelp, 
         label: 'Support & Docs', 
         desc: 'Contact team or read guides' 
     },

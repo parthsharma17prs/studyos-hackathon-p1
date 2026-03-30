@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { LuZap, LuChevronRight, LuPlay } from 'react-icons/lu';
 
 /**
@@ -88,11 +89,14 @@ export default function Hero() {
             {/* Red glow behind the mockup */}
             <div className="absolute -inset-2 bg-gradient-to-r from-student-accent/20 via-student-accent/5 to-student-accent/20 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity" />
 
-            <div className="relative rounded-xl overflow-hidden border border-white/10 bg-os-black">
-              <img
+            <div className="relative rounded-xl overflow-hidden border border-white/10 bg-os-black aspect-video lg:aspect-[16/10]">
+              <Image
                 src="/app-mockup.png"
                 alt="StudyOS App Mockup"
-                className="w-full h-auto object-cover transform scale-100 group-hover:scale-105 transition-transform duration-1000"
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                className="object-cover transform scale-100 group-hover:scale-105 transition-transform duration-1000"
               />
             </div>
 

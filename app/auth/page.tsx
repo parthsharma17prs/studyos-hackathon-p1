@@ -34,19 +34,6 @@ export default function AuthPage() {
     setErrorMsg('');
 
     try {
-      if (isSignup === 'demo') {
-        const demoUser = { 
-          uid: 'demo-user-id',
-          name: 'Demo Student', 
-          email: 'demo@studyos.ai', 
-          role: 'student',
-          isDemo: true
-        };
-        localStorage.setItem('studyos_user', JSON.stringify(demoUser));
-        router.push('/student/dashboard');
-        return;
-      }
-
       await setPersistence(auth, browserLocalPersistence);
       
       if (isSignup) {

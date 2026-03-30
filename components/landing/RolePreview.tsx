@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { LuCheckCircle } from 'react-icons/lu';
+import { LuCircleCheck } from 'react-icons/lu';
 
 /**
  * Student Power Preview — Highlighted student features

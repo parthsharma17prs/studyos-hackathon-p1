@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   LuUpload,
   LuBrain,
@@ -12,9 +12,16 @@ import {
   LuChevronRight,
   LuZap,
   LuCircleHelp,
-  LuCircleCheck
+  LuCircleCheck,
+  LuHistory,
+  LuVideo,
+  LuImage,
+  LuPresentation,
+  LuTrash2
 } from 'react-icons/lu';
 import Flashcards from '@/components/student/Flashcards';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 
 /**
  * Study Notes + Quiz Generator — Core feature
@@ -22,6 +29,11 @@ import Flashcards from '@/components/student/Flashcards';
  */
 
 // ─── TYPES ───
+interface SummaryItem {
+  heading: string;
+  description: string;
+}
+
 interface QuizQuestion {
   question: string;
   options: string[];
@@ -36,7 +48,7 @@ interface KeyTerm {
 }
 
 interface StudyData {
-  summary: string[];
+  summary: SummaryItem[];
   quiz: QuizQuestion[];
   keyTerms: KeyTerm[];
   studyStrategy: string;
@@ -45,16 +57,32 @@ interface StudyData {
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type Language = 'English' | 'Hindi' | 'Hinglish';
+type SummaryFormat = 'text' | 'video' | 'image' | 'ppt';
 type ViewMode = 'input' | 'results';
 type ResultTab = 'summary' | 'quiz' | 'terms' | 'results';
 
 const sampleStudyData: StudyData = {
   summary: [
-    "Artificial Intelligence (AI) refers to the simulation of human intelligence in machines that are programmed to think and learn.",
-    "Machine Learning is a subset of AI that focuses on the use of data and algorithms to imitate the way humans learn.",
-    "Deep Learning, a subfield of machine learning, is based on artificial neural networks with multiple layers.",
-    "Natural Language Processing (NLP) enables computers to understand, interpret, and generate human language.",
-    "Computer Vision allows machines to identify and process images in the same way that human vision does."
+    {
+      heading: "Artificial Intelligence (AI)",
+      description: "AI refers to the simulation of human intelligence in machines that are programmed to think like humans and mimic their actions. The term may also be applied to any machine that exhibits traits associated with a human mind such as learning and problem-solving."
+    },
+    {
+      heading: "Machine Learning (ML)",
+      description: "A subset of AI that provides systems the ability to automatically learn and improve from experience without being explicitly programmed. It focuses on the development of computer programs that can access data and use it to learn for themselves."
+    },
+    {
+      heading: "Deep Learning",
+      description: "A subfield of machine learning based on artificial neural networks with multiple layers (hence 'deep'). It is especially powerful for tasks like image recognition, natural language processing, and advanced pattern detection."
+    },
+    {
+      heading: "Natural Language Processing (NLP)",
+      description: "NLP is a branch of AI that helps computers understand, interpret, and manipulate human language. It is used in applications like translation services, voice-controlled assistants, and sentiment analysis."
+    },
+    {
+      heading: "Computer Vision",
+      description: "Computer Vision allows machines to identify and process images in the same way that human vision does. This involves algorithms that can categorize objects, detect motion, and even track human faces."
+    }
   ],
   quiz: [
     {
@@ -92,9 +120,11 @@ const sampleStudyData: StudyData = {
 export default function StudyPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('input');
   const [inputText, setInputText] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [questionCount, setQuestionCount] = useState(10);
   const [language, setLanguage] = useState<Language>('English');
+  const [format, setFormat] = useState<SummaryFormat>('text');
   const [isGenerating, setIsGenerating] = useState(false);
   const [studyData, setStudyData] = useState<StudyData | null>(null);
   const [activeTab, setActiveTab] = useState<ResultTab>('summary');
@@ -102,6 +132,42 @@ export default function StudyPage() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [error, setError] = useState('');
+  
+  // Past Sessions
+  const [pastSessions, setPastSessions] = useState<any[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+
+  useEffect(() => {
+    const fetchSessions = async () => {
+      try {
+        const q = query(collection(db, 'studySessions'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const sessions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPastSessions(sessions);
+      } catch (err) {
+        console.error('Error fetching sessions:', err);
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    };
+    fetchSessions();
+  }, []);
+
+  const loadPastSession = (session: any) => {
+    setStudyData(session.data);
+    setViewMode('results');
+    setActiveTab('summary');
+  };
+
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    try {
+      await deleteDoc(doc(db, 'studySessions', sessionId));
+      setPastSessions(prev => prev.filter(s => s.id !== sessionId));
+    } catch (err) {
+      console.error('Error deleting session:', err);
+    }
+  };
 
   const loadSample = () => {
     setIsGenerating(true);
@@ -114,7 +180,7 @@ export default function StudyPage() {
   };
 
   const handleGenerate = async () => {
-    if (!inputText.trim()) {
+    if (!inputText.trim() && !file) {
       setError('Please paste some text or upload a file.');
       return;
     }
@@ -122,24 +188,72 @@ export default function StudyPage() {
     setIsGenerating(true);
     
     try {
-      const response = await fetch('/api/groq/summarize', {
+      // 1. Generate Summary and Key Terms using existing endpoint
+      const formData = new FormData();
+      if (file) formData.append('file', file);
+      if (inputText.trim()) formData.append('content', inputText);
+      formData.append('difficulty', difficulty);
+      formData.append('language', language);
+      formData.append('questionCount', String(questionCount));
+      formData.append('format', format);
+
+      const summaryResponse = await fetch('/api/groq/summarize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          content: inputText,
-          difficulty,
-          language,
-          questionCount
-        }),
+        body: formData,
       });
       
-      const data = await response.json();
+      const summaryData = await summaryResponse.json();
       
-      if (data.error) {
-        throw new Error(data.error);
+      if (summaryData.error) {
+        throw new Error(summaryData.error);
       }
+
+      // 2. Generate Structured Quiz using new Quiz endpoint (LSTM/Framework style)
+      const quizResponse = await fetch('/api/groq/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes: inputText || (summaryData.summary ? summaryData.summary.join(' ') : ''),
+          difficulty: difficulty
+        }),
+      });
+
+      const rawQuizData = await quizResponse.json();
       
-      setStudyData(data);
+      // Transform new quiz data to match existing UI structure
+      const formattedQuiz = Array.isArray(rawQuizData) ? rawQuizData.map((q: any) => ({
+        question: q.question,
+        options: Object.values(q.options),
+        correct: ['A', 'B', 'C', 'D'].indexOf(q.correct_answer_key),
+        explanation: q.correct_answer_text,
+        topic: q.topic || 'General'
+      })) : summaryData.quiz;
+
+      const fullData = {
+        ...summaryData,
+        quiz: formattedQuiz
+      };
+      
+      // Save to Firebase
+      try {
+        const docRef = await addDoc(collection(db, 'studySessions'), {
+          title: inputText.substring(0, 30) + '...',
+          data: fullData,
+          format: format,
+          createdAt: serverTimestamp()
+        });
+        setPastSessions(prev => [{
+            id: docRef.id, 
+            title: inputText.substring(0, 30) + '...',
+            data: fullData,
+            format: format,
+            createdAt: new Date()
+        }, ...prev]);
+      } catch (firebaseErr) {
+        console.error('Firebase save error:', firebaseErr);
+      }
+
+      setStudyData(fullData);
       setViewMode('results');
       setActiveTab('summary');
     } catch (err: any) {
@@ -167,19 +281,58 @@ export default function StudyPage() {
 
   if (viewMode === 'input') {
     return (
-      <div className="max-w-4xl mx-auto space-y-10">
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-4xl font-black tracking-tighter mb-2">Generate Study Set</h2>
-            <p className="text-os-muted text-sm uppercase tracking-widest font-bold">Paste notes. Get AI magic.</p>
+      <div className="max-w-7xl mx-auto flex gap-8">
+        {/* Sidebar for Past Chats/Sessions */}
+        <div className="w-80 shrink-0 bg-os-card border border-os-border rounded-3xl p-6 hidden lg:flex flex-col">
+          <h3 className="text-sm font-black uppercase tracking-widest text-os-muted mb-6 flex items-center gap-2">
+            <LuHistory /> Past Sessions
+          </h3>
+          <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+            {isLoadingSessions ? (
+              <div className="text-xs text-os-muted animate-pulse">Loading...</div>
+            ) : pastSessions.length === 0 ? (
+              <div className="text-xs text-os-muted italic">No past sessions found.</div>
+            ) : (
+              pastSessions.map(session => (
+                <div key={session.id} className="relative group/item">
+                  <button
+                    onClick={() => loadPastSession(session)}
+                    className="w-full text-left p-4 rounded-xl hover:bg-white/5 border border-transparent hover:border-os-border transition-all group pr-12"
+                  >
+                    <p className="text-sm font-bold text-white truncate max-w-full">
+                      {session.title || 'Untitled Session'}
+                    </p>
+                    <p className="text-[10px] text-os-muted uppercase mt-1 flex items-center gap-2">
+                       <span className="bg-student-accent/20 text-student-accent px-1.5 py-0.5 rounded-sm">{session.format || 'text'}</span>
+                    </p>
+                  </button>
+                  <button 
+                    onClick={(e) => handleDeleteSession(e, session.id)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-os-muted hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-all hover:bg-red-500/10 rounded-lg"
+                    title="Delete Session"
+                  >
+                    <LuTrash2 size={16} />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
-          <button
-            onClick={loadSample}
-            className="btn-ghost flex items-center gap-2 border-student-accent text-student-accent bg-student-accent/5 hover:bg-student-accent/10 animate-pulse transition-all"
-          >
-            <LuZap size={16} /> Try Sample Data
-          </button>
         </div>
+
+        {/* Main Input Area */}
+        <div className="flex-1 space-y-10">
+          <div className="flex items-end justify-between">
+            <div>
+              <h2 className="text-4xl font-black tracking-tighter mb-2">Generate Study Set</h2>
+              <p className="text-os-muted text-sm uppercase tracking-widest font-bold">Paste notes. Get AI magic.</p>
+            </div>
+            <button
+              onClick={loadSample}
+              className="btn-ghost flex items-center gap-2 border-student-accent text-student-accent bg-student-accent/5 hover:bg-student-accent/10 animate-pulse transition-all"
+            >
+              <LuZap size={16} /> Try Sample Data
+            </button>
+          </div>
 
         {/* Text Input Area */}
         <div className="relative group">
@@ -198,24 +351,61 @@ export default function StudyPage() {
         <div className="flex items-center gap-6">
           <label className="btn-ghost cursor-pointer flex items-center gap-2 text-xs uppercase tracking-widest font-black">
             <LuUpload size={16} className="text-student-accent" />
-            Upload PDF / Image
-            <input type="file" className="hidden" />
+            {file ? file.name : 'Upload PDF / Image'}
+            <input 
+              type="file" 
+              accept=".pdf,.png,.jpg,.jpeg"
+              onChange={(e) => {
+                if(e.target.files && e.target.files.length > 0) {
+                  setFile(e.target.files[0]);
+                }
+              }}
+              className="hidden" 
+            />
           </label>
-          <span className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-bold">OCR & Vision Powered</span>
+          <span className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-bold">
+            {file ? 'File Attached Successfully' : 'OCR & Vision Powered'}
+          </span>
+          {file && (
+            <button 
+              onClick={() => setFile(null)} 
+              className="text-[10px] text-red-500 uppercase font-bold hover:underline"
+            >
+              Remove
+            </button>
+          )}
         </div>
 
         <div className="ribbon-student" />
 
         {/* Controls Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div>
+            <label className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-black block mb-4">Format</label>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => setFormat('text')} className={`flex items-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${format === 'text' ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted'}`}>
+                <LuFileText size={14}/> Text
+              </button>
+              <button onClick={() => setFormat('video')} className={`flex items-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${format === 'video' ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted'}`}>
+                <LuVideo size={14}/> Video
+              </button>
+              <button onClick={() => setFormat('image')} className={`flex items-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${format === 'image' ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted'}`}>
+                <LuImage size={14}/> Image
+              </button>
+              <button onClick={() => setFormat('ppt')} className={`flex items-center gap-2 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${format === 'ppt' ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted'}`}>
+                <LuPresentation size={14}/> PPT
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-black block mb-4">Difficulty</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               {['easy', 'medium', 'hard'].map(d => (
                 <button
                   key={d}
                   onClick={() => setDifficulty(d as Difficulty)}
-                  className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${difficulty === d ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted hover:border-os-muted'
+                  className={`py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${difficulty === d ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted hover:border-os-muted'
                     }`}
                 >
                   {d}
@@ -225,25 +415,25 @@ export default function StudyPage() {
           </div>
 
           <div>
-            <label className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-black block mb-4">Question Count: {questionCount}</label>
+            <label className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-black block mb-4">Questions: {questionCount}</label>
             <input
               type="range"
               min={3}
               max={15}
               value={questionCount}
               onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-              className="w-full h-1 bg-os-border rounded-lg appearance-none cursor-pointer accent-student-accent"
+              className="w-full h-1 bg-os-border rounded-lg appearance-none cursor-pointer accent-student-accent mt-4"
             />
           </div>
 
           <div>
             <label className="text-[10px] text-os-muted uppercase tracking-[0.2em] font-black block mb-4">Language</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               {['English', 'Hindi', 'Hinglish'].map(l => (
                 <button
                   key={l}
                   onClick={() => setLanguage(l as Language)}
-                  className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${language === l ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted hover:border-os-muted'
+                  className={`py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${language === l ? 'bg-student-accent border-student-accent text-white' : 'bg-transparent border-os-border text-os-muted hover:border-os-muted'
                     }`}
                 >
                   {l}
@@ -256,11 +446,11 @@ export default function StudyPage() {
         {/* Generate Button */}
         <button
           onClick={handleGenerate}
-          disabled={isGenerating || !inputText.trim()}
+          disabled={isGenerating || (!inputText.trim() && !file)}
           className={`
             w-full py-6 rounded-2xl text-xl font-black uppercase tracking-[0.2em]
             transition-all duration-500
-            ${isGenerating || !inputText.trim()
+            ${isGenerating || (!inputText.trim() && !file)
               ? 'bg-os-border text-os-muted cursor-not-allowed opacity-50'
               : 'btn-primary-student'
             }
@@ -287,6 +477,7 @@ export default function StudyPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     );
   }
@@ -303,8 +494,19 @@ export default function StudyPage() {
         >
           <LuChevronLeft className="group-hover:-translate-x-1 transition-transform" /> New Study Session
         </button>
-        <button className="btn-ghost flex items-center gap-2 border-student-accent/20 text-xs">
-          <LuDownload size={14} /> Download PDF
+        <button
+          onClick={() => {
+            const blob = new Blob([JSON.stringify(studyData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'study_session.json';
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="btn-ghost flex items-center gap-2 border-student-accent/20 text-xs text-student-accent hover:bg-student-accent/10 transition-all"
+        >
+          <LuDownload size={14} /> Download JSON
         </button>
       </div>
 
@@ -340,18 +542,36 @@ export default function StudyPage() {
       {/* Content Rendering */}
       {activeTab === 'summary' && (
         <div className="grid grid-cols-1 gap-4 animate-fade-up">
-          <h3 className="text-3xl font-black tracking-tighter mb-4">Deep Summary</h3>
-          {studyData.summary.map((point, i) => (
-            <div
+          <h3 className="text-4xl font-black tracking-tighter mb-8 italic drop-shadow-2xl">
+            Deep <span className="text-student-accent">Summary</span>
+          </h3>
+          {studyData.summary.map((item, i) => (
+            <details
               key={i}
-              className="glass-card p-8 flex gap-6 hover:bg-white/[0.01]"
+              className="glass-card group transition-all duration-500 overflow-hidden open:ring-2 open:ring-student-accent/30"
               style={{ animationDelay: `${i * 0.1}s` }}
             >
-              <div className="w-10 h-10 rounded-xl bg-student-accent/10 border border-student-accent/20 flex items-center justify-center shrink-0">
-                <span className="text-student-accent font-black text-sm">{i + 1}</span>
+              <summary className="p-8 cursor-pointer flex items-center justify-between hover:bg-white/[0.02] transition-colors list-none">
+                <div className="flex items-center gap-6">
+                  <div className="w-12 h-12 rounded-2xl bg-student-accent/10 border border-student-accent/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-lg shadow-student-accent/5">
+                    <span className="text-student-accent font-black text-lg">{i + 1}</span>
+                  </div>
+                  <h4 className="text-xl font-black tracking-tight group-hover:text-student-accent transition-colors">
+                    {item.heading}
+                  </h4>
+                </div>
+                <div className="w-8 h-8 rounded-full border border-os-border flex items-center justify-center group-hover:border-student-accent group-hover:bg-student-accent/10 transition-all">
+                  <LuChevronRight size={18} className="text-os-muted group-hover:text-student-accent group-open:rotate-90 transition-transform" />
+                </div>
+              </summary>
+              <div className="px-8 pb-10 mt-2 animate-in slide-in-from-top-4 duration-500">
+                <div className="pl-18 border-l-2 border-student-accent/20">
+                  <p className="text-base font-medium leading-relaxed text-os-muted/80 whitespace-pre-wrap selection:bg-student-accent/30 drop-shadow-sm">
+                    {item.description}
+                  </p>
+                </div>
               </div>
-              <p className="text-sm font-medium leading-relaxed text-os-muted group-hover:text-white transition-colors">{point}</p>
-            </div>
+            </details>
           ))}
         </div>
       )}
