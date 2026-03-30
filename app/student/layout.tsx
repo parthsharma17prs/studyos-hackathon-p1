@@ -24,12 +24,12 @@ import {
 
 const studentNavItems: SidebarItem[] = [
   { icon: LuLayoutDashboard, label: 'Dashboard', href: '/student/dashboard' },
+  { icon: LuMic, label: 'Orbital Voice', href: '/student/ai-call' },
   { icon: LuBookOpen, label: 'Study Notes + Quiz', href: '/student/study' },
   { icon: LuActivity, label: 'My Scorecard', href: '/student/scorecard' },
   { icon: LuFileSearch, label: 'ATS Resume', href: '/student/resume' },
   { icon: LuSearch, label: 'Learning Gaps', href: '/student/gaps' },
   { icon: LuSwords, label: 'Battle Mode', href: '/student/battle' },
-  { icon: LuMic, label: 'Interview Prep', href: '/student/interview' },
   { icon: LuWrench, label: 'MCP AI Tools', href: '/student/mcp' },
   { icon: LuCalendar, label: 'Study Schedule', href: '/student/schedule' },
   { icon: LuTrendingUp, label: 'Exam Predictor', href: '/student/predictor' },

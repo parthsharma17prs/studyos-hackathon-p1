@@ -120,13 +120,38 @@ export default function StudyPage() {
     }
     setError('');
     setIsGenerating(true);
-    // Simulation for demo
-    setTimeout(() => {
+    
+    try {
+      const response = await fetch('/api/groq/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          content: inputText,
+          difficulty,
+          language,
+          questionCount
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      setStudyData(data);
+      setViewMode('results');
+      setActiveTab('summary');
+    } catch (err: any) {
+      console.error('Generation Error:', err);
+      setError('AI service is temporarily unavailable. Loading sample data instead.');
+      // Fallback to sample for smoother UX
       setStudyData(sampleStudyData);
       setViewMode('results');
       setActiveTab('summary');
+    } finally {
       setIsGenerating(false);
-    }, 2000);
+    }
   };
 
   const handleQuizSubmit = () => {

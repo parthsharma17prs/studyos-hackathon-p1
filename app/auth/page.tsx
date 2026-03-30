@@ -3,6 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LuZap, LuLock, LuMail, LuUser, LuArrowRight } from 'react-icons/lu';
+import { auth, db } from '@/lib/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  setPersistence,
+  browserLocalPersistence
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 /**
  * Auth Page — Student-only login
@@ -13,24 +21,71 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isSignup, setIsSignup] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setErrorMsg('Please enter both email and password.');
+  const handleAuth = async () => {
+    if (!email || !password || (isSignup && !name)) {
+      setErrorMsg('Please fill in all fields.');
       return;
     }
     setIsLoading(true);
     setErrorMsg('');
 
-    // Mock login for demo
-    setTimeout(() => {
-      const mockUser = { name: 'Demo Student', email: email, role: 'student' };
-      localStorage.setItem('studyos_user', JSON.stringify(mockUser));
-      localStorage.setItem('studyos_role', 'student');
+    try {
+      if (isSignup === 'demo') {
+        const demoUser = { 
+          uid: 'demo-user-id',
+          name: 'Demo Student', 
+          email: 'demo@studyos.ai', 
+          role: 'student',
+          isDemo: true
+        };
+        localStorage.setItem('studyos_user', JSON.stringify(demoUser));
+        router.push('/student/dashboard');
+        return;
+      }
+
+      await setPersistence(auth, browserLocalPersistence);
+      
+      if (isSignup) {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Create user profile in Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          name,
+          email,
+          role: 'student',
+          createdAt: new Date().toISOString()
+        });
+        
+        const userData = { name, email, role: 'student', uid: user.uid };
+        localStorage.setItem('studyos_user', JSON.stringify(userData));
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Fetch user data from Firestore
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          localStorage.setItem('studyos_user', JSON.stringify(userData));
+        } else {
+          // Fallback if doc doesn't exist
+          localStorage.setItem('studyos_user', JSON.stringify({ name: 'Student', email, role: 'student' }));
+        }
+      }
+      
       router.push('/student/dashboard');
-    }, 1500);
+    } catch (error: any) {
+      console.error('Auth error:', error);
+      setErrorMsg(error.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -56,6 +111,19 @@ export default function AuthPage() {
         {/* Form */}
         <div className="space-y-6">
           <div className="space-y-4">
+            {isSignup && (
+              <div className="relative group">
+                <LuUser className="absolute left-4 top-1/2 -translate-y-1/2 text-os-muted group-focus-within:text-student-accent transition-colors" size={18} />
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="w-full bg-black/50 border border-os-border focus:border-student-accent rounded-xl p-4 pl-12 text-white outline-none transition-all"
+                />
+              </div>
+            )}
+
             <div className="relative group">
               <LuMail className="absolute left-4 top-1/2 -translate-y-1/2 text-os-muted group-focus-within:text-student-accent transition-colors" size={18} />
               <input
@@ -82,7 +150,7 @@ export default function AuthPage() {
           {errorMsg && <p className="text-red-500 text-center text-xs font-bold uppercase tracking-widest">{errorMsg}</p>}
 
           <button
-            onClick={handleLogin}
+            onClick={handleAuth}
             disabled={isLoading || !email || !password}
             className="w-full btn-primary-student group flex items-center justify-center gap-3 py-5"
           >
@@ -101,6 +169,20 @@ export default function AuthPage() {
             className="w-full text-center text-[10px] font-black uppercase tracking-[0.2em] text-os-muted hover:text-white transition-all"
           >
             {isSignup ? "Already have a session? Log in." : "New user? Initialize Session."}
+          </button>
+
+          <div className="h-px bg-os-border my-4" />
+
+          <button
+            onClick={() => {
+              // demo login shortcut
+              const demoUser = { name: 'Demo Student', email: 'demo@studyos.ai', role: 'student', uid: 'demo-user-id' };
+              localStorage.setItem('studyos_user', JSON.stringify(demoUser));
+              router.push('/student/dashboard');
+            }}
+            className="w-full py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] text-student-accent hover:text-white border border-student-accent/20 hover:bg-student-accent/10 rounded-xl transition-all"
+          >
+            Enter as Demo Student (Skip Auth)
           </button>
         </div>
 
